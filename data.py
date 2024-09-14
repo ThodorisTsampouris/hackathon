@@ -4,6 +4,8 @@ import requests
 import json
 import os
 from dotenv import load_dotenv
+from datetime import datetime, timedelta
+import pytz
 
 # Load variables from .env file into os.environ
 load_dotenv()
@@ -154,9 +156,15 @@ def fetch_data_from_copernicus(band_name, polygon_coordinates):
             "type": "Polygon",
             "coordinates": [polygon_coordinates],
         }
+        # Get the current date and time in UTC
+        now = datetime.now(pytz.utc)
 
-        from_time = "2023-01-01T23:59:59Z"
-        to_time = "2023-01-31T23:59:59Z"
+        # Calculate the date one year before the current date
+        one_year_ago = now - timedelta(days=365)
+
+        # Format the dates to match your original format
+        to_time = now.strftime('%Y-%m-%dT%H:%M:%SZ')
+        from_time = one_year_ago.strftime('%Y-%m-%dT%H:%M:%SZ')
 
         payload = prepare_payload(aoi, band, band_id, from_time, to_time, data_type)
         stats_data = get_statistics(access_token, payload)

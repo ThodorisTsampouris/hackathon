@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 import requests
+from data import fetch_data_from_copernicus
 
 # Initialize the Flask application
 app = Flask(__name__)
@@ -16,6 +17,9 @@ def postal_code_to_small_polygon(postal_code, country_code, offset=0.0001):
     if response.status_code == 200:
         data = response.json()
 
+        band_name = "O3"
+        atm_data = fetch_data_from_copernicus(band_name)
+        print(atm_data)
         # Ensure there is data returned
         if len(data) > 0:
             # Extract the latitude and longitude from the first result

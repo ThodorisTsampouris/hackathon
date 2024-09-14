@@ -17,15 +17,12 @@ def postal_code_to_small_polygon(postal_code, country_code, offset=0.0001):
     if response.status_code == 200:
         data = response.json()
 
-        band_name = "O3"
-        atm_data = fetch_data_from_copernicus(band_name)
-        print(atm_data)
         # Ensure there is data returned
         if len(data) > 0:
             # Extract the latitude and longitude from the first result
             lat = round(float(data[0]['lat']), 4)
             lon = round(float(data[0]['lon']), 4)
-            print(f"Latitude: {lat}, Longitude: {lon}")
+            # print(f"Latitude: {lat}, Longitude: {lon}")
 
             # Create a small polygon around the point
             return point_to_polygon(lat, lon, offset)
@@ -74,13 +71,18 @@ def get_postal_code_data():
     postal_code = data['postal_code']
 
     # polygon coordinates
-    coordinates = postal_code_to_small_polygon(postal_code, "GR")
+    polygon_coordinates = postal_code_to_small_polygon(postal_code, "GR")
+
+    band_name = "O3"
+
+    atmosphere_data = fetch_data_from_copernicus(band_name, polygon_coordinates)
 
     # Return a success message along with the postal_code received
     return jsonify({
         'message': 'Postal code received',
         'postal_code': postal_code,
-        'coordinates': coordinates
+        'data': atmosphere_data["data"]
+        # 'coordinates': polygon_coordinates
     }), 200
 
 

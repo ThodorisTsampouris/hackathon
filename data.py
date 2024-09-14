@@ -11,6 +11,7 @@ load_dotenv()
 USERNAME = os.environ.get("COP_USER")
 PASSWORD = os.environ.get("COP_PASS")
 
+
 def authenticate(username, password):
     auth_url = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
     payload = {
@@ -23,6 +24,7 @@ def authenticate(username, password):
     response.raise_for_status()
     access_token = response.json()["access_token"]
     return access_token
+
 
 def prepare_payload(aoi, band, band_id, from_time, to_time, data_type):
     payload = {
@@ -77,6 +79,7 @@ def prepare_payload(aoi, band, band_id, from_time, to_time, data_type):
     }
     return payload
 
+
 def get_statistics(access_token, payload):
     stats_url = "https://sh.dataspace.copernicus.eu/api/v1/statistics"
     headers = {
@@ -88,7 +91,8 @@ def get_statistics(access_token, payload):
     stats_data = response.json()
     return stats_data
 
-def fetch_data_from_copernicus(band_name):
+
+def fetch_data_from_copernicus(band_name, polygon_coordinates):
     try:
         access_token = authenticate(USERNAME, PASSWORD)
 
@@ -148,15 +152,7 @@ def fetch_data_from_copernicus(band_name):
 
         aoi = {
             "type": "Polygon",
-            "coordinates": [
-                [
-                    [23.5500, 37.8500],
-                    [23.5500, 38.1500],
-                    [23.9500, 38.1500],
-                    [23.9500, 37.8500],
-                    [23.5500, 37.8500],
-                ]
-            ],
+            "coordinates": [polygon_coordinates],
         }
 
         from_time = "2023-01-01T23:59:59Z"

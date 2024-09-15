@@ -1,6 +1,9 @@
+import concurrent.futures
 from flask import Flask, request, jsonify
 import requests
 from data import fetch_data_from_copernicus
+import json
+import pandas as pd
 
 # Initialize the Flask application
 app = Flask(__name__)
@@ -23,10 +26,8 @@ def postal_code_to_small_polygon(postal_code, country_code, offset=0.001):
         # Ensure there is data returned
         if len(data) > 0:
             # Extract the latitude and longitude from the first result
-            lat = round(float(data[0]['lat']), 4)
-            lon = round(float(data[0]['lon']), 4)
-            # print(f"Latitude: {lat}, Longitude: {lon}")
-
+            lat = round(float(data[0]["lat"]), 4)
+            lon = round(float(data[0]["lon"]), 4)
             # Create a small polygon around the point
             return point_to_polygon(lat, lon, offset)
         else:
@@ -47,56 +48,106 @@ def point_to_polygon(lat, lon, offset=0.001):
     Returns:
     list: A list of coordinates representing the polygon (square) around the point
     """
-
-    # Define the four corners of the square
     polygon = [
         [lon - offset, lat - offset],  # South-West
         [lon - offset, lat + offset],  # North-West
         [lon + offset, lat + offset],  # North-East
         [lon + offset, lat - offset],  # South-East
-        [lon - offset, lat - offset]  # South-West (to close the polygon)
+        [lon - offset, lat - offset],  # South-West (to close the polygon)
     ]
-
     return polygon
 
 
-# Define a POST endpoint to receive user's postal_code field in the request body
-@app.route('/api/v1/data/postal_code', methods=['POST'])
+def fetch_band_data_parallel(bands_and_ids, polygon_coordinates):
+    """
+    Fetch data for all bands in parallel using ThreadPoolExecutor.
+    """
+    results = []
+
+    def fetch_band_data(band):
+        band_name = band["band"]
+        print(f"Fetching data for band: {band_name}")  # Debugging statement
+        return fetch_data_from_copernicus(band_name, polygon_coordinates)
+
+    # Use ThreadPoolExecutor to run tasks in parallel
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        future_to_band = {
+            executor.submit(fetch_band_data, band): band for band in bands_and_ids
+        }
+
+        # Iterate through the completed futures as they finish
+        for future in concurrent.futures.as_completed(future_to_band):
+            band = future_to_band[future]
+            try:
+                data = future.result()
+                print(f"Received data for band: {band['band']}")  # Debugging statement
+                results.append({"band": band["band"], "data": data})
+            except Exception as exc:
+                print(
+                    f"Error fetching data for band: {band['band']} - {exc}"
+                )  # Debugging statement
+                results.append({"band": band["band"], "error": str(exc)})
+
+    return results
+
+
+@app.route("/api/v1/data/postal_code", methods=["POST"])
 def get_postal_code_data():
-    # Parse the JSON body
     data = request.get_json()
 
-    # Check if 'postal_code' field is present
-    if 'postal_code' not in data:
-        return jsonify({'error': 'postal_code is required'}), 400
+    if "postal_code" not in data:
+        return jsonify({"error": "postal_code is required"}), 400
 
-    # Extract the postal_code
-    postal_code = data['postal_code']
+    postal_code = data["postal_code"]
 
-    # polygon coordinates
     polygon_coordinates = postal_code_to_small_polygon(postal_code, "GR")
-    # print(polygon_coordinates)
+    bands_and_ids = [
+        {"band": "NO2", "band_id": "no2", "data_type": "S5PL2"},
+        # {"band": "O3", "band_id": "o3", "data_type": "S5PL2"},
+        # {"band": "CO", "band_id": "co", "data_type": "S5PL2"},
+        # {"band": "SO2", "band_id": "so2", "data_type": "S5PL2"},
+        # {"band": "CH4", "band_id": "ch4", "data_type": "S5PL2"},
+        # {"band": "AER_AI", "band_id": "aer_ai", "data_type": "S5PL2"},
+    ]
 
-    band_name = "O3"
+    atmosphere_data = fetch_band_data_parallel(bands_and_ids, polygon_coordinates)
+
+    
+    df = pd.DataFrame(atmosphere_data[0]["data"])
+    flattened_df=pd.json_normalize(df["data"])
+  
+
+    flattened_df['outputs.no2.bands.B0.stats.mean'] = pd.to_numeric(flattened_df['outputs.no2.bands.B0.stats.mean'], errors='coerce')
+    meanv=flattened_df['outputs.no2.bands.B0.stats.mean']
+    result = (64.07 * 10**6 * meanv) / 10000
+
+    def categorize_value(value):
+        if 0 <= value <= 53:
+            return 1
+        elif 54 <= value <= 100:
+            return 2
+        elif 101 <= value <= 360:
+            return 3
+        elif 361 <= value <= 649:
+            return 4
+        elif 650 <= value <= 1249:
+            return 5
+        else:
+            return None  # In case the value falls outside the provided ranges
+
+    # Apply the function to each row in the 'values' column
+    flattened_df['g_value'] = result.apply(categorize_value)
+    mean_value=flattened_df['g_value'].mean()
+
+    return (
+        jsonify(
+            {
+                "level": mean_value 
+            }
+        ),
+        200,
+    )
 
 
-    # {"band": "NO2", "band_id": "no2", "data_type": "S5PL2"},
-    # {"band": "O3", "band_id": "o3", "data_type": "S5PL2"},
-    # {"band": "CO", "band_id": "co", "data_type": "S5PL2"},
-    # {"band": "SO2", "band_id": "so2", "data_type": "S5PL2"},
-    # {"band": "CH4", "band_id": "ch4", "data_type": "S5PL2"},
-    # {"band": "AER_AI", "band_id": "aer_ai", "data_type": "S5PL2"},
-    atmosphere_data = fetch_data_from_copernicus(band_name, polygon_coordinates)
-
-    # Return a success message along with the postal_code received
-    return jsonify({
-        'message': 'Postal code received',
-        'postal_code': postal_code,
-        'data': atmosphere_data
-        # 'coordinates': polygon_coordinates
-    }), 200
-
-
-# Run the application
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(debug=True)

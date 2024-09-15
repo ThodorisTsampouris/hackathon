@@ -6,7 +6,10 @@ from data import fetch_data_from_copernicus
 app = Flask(__name__)
 
 
-def postal_code_to_small_polygon(postal_code, country_code, offset=0.0001):
+def postal_code_to_small_polygon(postal_code, country_code, offset=0.001):
+    lat = round(float(40.6344883030303), 4)
+    lon = round(float(22.951071874242427), 4)
+    return point_to_polygon(lat, lon, offset)
     # Define the Nominatim API URL with the postal code and country code
     url = f"https://nominatim.openstreetmap.org/search?postalcode={postal_code}&country={country_code}&format=json"
 
@@ -32,7 +35,7 @@ def postal_code_to_small_polygon(postal_code, country_code, offset=0.0001):
         print(f"Failed to retrieve data. Status code: {response.status_code}")
 
 
-def point_to_polygon(lat, lon, offset=0.0001):
+def point_to_polygon(lat, lon, offset=0.001):
     """
     Create a small square polygon around a point (lat, lon) using a specified offset.
 
@@ -72,16 +75,24 @@ def get_postal_code_data():
 
     # polygon coordinates
     polygon_coordinates = postal_code_to_small_polygon(postal_code, "GR")
+    # print(polygon_coordinates)
 
     band_name = "O3"
 
+
+    # {"band": "NO2", "band_id": "no2", "data_type": "S5PL2"},
+    # {"band": "O3", "band_id": "o3", "data_type": "S5PL2"},
+    # {"band": "CO", "band_id": "co", "data_type": "S5PL2"},
+    # {"band": "SO2", "band_id": "so2", "data_type": "S5PL2"},
+    # {"band": "CH4", "band_id": "ch4", "data_type": "S5PL2"},
+    # {"band": "AER_AI", "band_id": "aer_ai", "data_type": "S5PL2"},
     atmosphere_data = fetch_data_from_copernicus(band_name, polygon_coordinates)
 
     # Return a success message along with the postal_code received
     return jsonify({
         'message': 'Postal code received',
         'postal_code': postal_code,
-        'data': atmosphere_data["data"]
+        'data': atmosphere_data
         # 'coordinates': polygon_coordinates
     }), 200
 

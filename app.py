@@ -1,39 +1,11 @@
 import concurrent.futures
 from flask import Flask, request, jsonify
-import requests
 from data import fetch_data_from_copernicus
 import json
 import pandas as pd
 
 # Initialize the Flask application
 app = Flask(__name__)
-
-
-def postal_code_to_small_polygon(postal_code, country_code, offset=0.001):
-    lat = round(float(40.6344883030303), 4)
-    lon = round(float(22.951071874242427), 4)
-    return point_to_polygon(lat, lon, offset)
-    # Define the Nominatim API URL with the postal code and country code
-    url = f"https://nominatim.openstreetmap.org/search?postalcode={postal_code}&country={country_code}&format=json"
-
-    # Make the request to the API
-    response = requests.get(url)
-
-    # Check if the request was successful
-    if response.status_code == 200:
-        data = response.json()
-
-        # Ensure there is data returned
-        if len(data) > 0:
-            # Extract the latitude and longitude from the first result
-            lat = round(float(data[0]["lat"]), 4)
-            lon = round(float(data[0]["lon"]), 4)
-            # Create a small polygon around the point
-            return point_to_polygon(lat, lon, offset)
-        else:
-            print("No data found for the given postal code and country.")
-    else:
-        print(f"Failed to retrieve data. Status code: {response.status_code}")
 
 
 def point_to_polygon(lat, lon, offset=0.001):
@@ -91,25 +63,37 @@ def fetch_band_data_parallel(bands_and_ids, polygon_coordinates):
     return results
 
 
-@app.route("/api/v1/data/postal_code", methods=["POST"])
+@app.route("/api/v1/data", methods=["POST"])
 def get_postal_code_data():
     data = request.get_json()
 
-    if "postal_code" not in data:
-        return jsonify({"error": "postal_code is required"}), 400
+    # Check if 'latitude' field is present
+    if 'latitude' not in data:
+        return jsonify({'error': 'latitude is required'}), 400
 
-    postal_code = data["postal_code"]
+    # Check if 'longitude' field is present
+    if 'longitude' not in data:
+        return jsonify({'error': 'longitude is required'}), 400
 
-    polygon_coordinates = postal_code_to_small_polygon(postal_code, "GR")
+    # Extract the postal_code
+    latitude = round(float(data['latitude']), 4)
+    longitude = round(float(data['longitude']), 4)
+
+    # set offset for polygon calculation
+    offset = 0.001
+
+    # polygon coordinates
+    polygon_coordinates = point_to_polygon(latitude, longitude, offset)
+    
     bands_and_ids = [
-        {"band": "NO2", "band_id": "no2", "data_type": "S5PL2"},
-        # {"band": "O3", "band_id": "o3", "data_type": "S5PL2"},
-        # {"band": "CO", "band_id": "co", "data_type": "S5PL2"},
-        # {"band": "SO2", "band_id": "so2", "data_type": "S5PL2"},
-        # {"band": "CH4", "band_id": "ch4", "data_type": "S5PL2"},
-        # {"band": "AER_AI", "band_id": "aer_ai", "data_type": "S5PL2"},
-    ]
-
+            {"band": "NO2", "band_id": "no2", "data_type": "S5PL2"},
+            # {"band": "O3", "band_id": "o3", "data_type": "S5PL2"},
+            # {"band": "CO", "band_id": "co", "data_type": "S5PL2"},
+            # {"band": "SO2", "band_id": "so2", "data_type": "S5PL2"},
+            # {"band": "CH4", "band_id": "ch4", "data_type": "S5PL2"},
+            # {"band": "AER_AI", "band_id": "aer_ai", "data_type": "S5PL2"},
+        ]
+    
     atmosphere_data = fetch_band_data_parallel(bands_and_ids, polygon_coordinates)
 
     

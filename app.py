@@ -1,11 +1,13 @@
 import concurrent.futures
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from data import fetch_data_from_copernicus
 import json
 import pandas as pd
 
 # Initialize the Flask application
 app = Flask(__name__)
+CORS(app)
 
 
 def point_to_polygon(lat, lon, offset=0.001):
@@ -84,26 +86,25 @@ def get_postal_code_data():
 
     # polygon coordinates
     polygon_coordinates = point_to_polygon(latitude, longitude, offset)
-    
+
     bands_and_ids = [
-            {"band": "NO2", "band_id": "no2", "data_type": "S5PL2"},
-            # {"band": "O3", "band_id": "o3", "data_type": "S5PL2"},
-            # {"band": "CO", "band_id": "co", "data_type": "S5PL2"},
-            # {"band": "SO2", "band_id": "so2", "data_type": "S5PL2"},
-            # {"band": "CH4", "band_id": "ch4", "data_type": "S5PL2"},
-            # {"band": "AER_AI", "band_id": "aer_ai", "data_type": "S5PL2"},
-        ]
-    
+        {"band": "NO2", "band_id": "no2", "data_type": "S5PL2"},
+        # {"band": "O3", "band_id": "o3", "data_type": "S5PL2"},
+        # {"band": "CO", "band_id": "co", "data_type": "S5PL2"},
+        # {"band": "SO2", "band_id": "so2", "data_type": "S5PL2"},
+        # {"band": "CH4", "band_id": "ch4", "data_type": "S5PL2"},
+        # {"band": "AER_AI", "band_id": "aer_ai", "data_type": "S5PL2"},
+    ]
+
     atmosphere_data = fetch_band_data_parallel(bands_and_ids, polygon_coordinates)
 
-    
     df = pd.DataFrame(atmosphere_data[0]["data"])
-    flattened_df=pd.json_normalize(df["data"])
-  
+    flattened_df = pd.json_normalize(df["data"])
 
-    flattened_df['outputs.no2.bands.B0.stats.mean'] = pd.to_numeric(flattened_df['outputs.no2.bands.B0.stats.mean'], errors='coerce')
-    meanv=flattened_df['outputs.no2.bands.B0.stats.mean']
-    result = (64.07 * 10**6 * meanv) / 10000
+    flattened_df['outputs.no2.bands.B0.stats.mean'] = pd.to_numeric(flattened_df['outputs.no2.bands.B0.stats.mean'],
+                                                                    errors='coerce')
+    meanv = flattened_df['outputs.no2.bands.B0.stats.mean']
+    result = (64.07 * 10 ** 6 * meanv) / 10000
 
     def categorize_value(value):
         if 0 <= value <= 53:
@@ -121,12 +122,12 @@ def get_postal_code_data():
 
     # Apply the function to each row in the 'values' column
     flattened_df['g_value'] = result.apply(categorize_value)
-    mean_value=flattened_df['g_value'].mean()
+    mean_value = flattened_df['g_value'].mean()
 
     return (
         jsonify(
             {
-                "level": mean_value 
+                "level": mean_value
             }
         ),
         200,

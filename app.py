@@ -1,38 +1,8 @@
 from flask import Flask, request, jsonify
-import requests
 from data import fetch_data_from_copernicus
 
 # Initialize the Flask application
 app = Flask(__name__)
-
-
-def postal_code_to_small_polygon(postal_code, country_code, offset=0.001):
-    lat = round(float(40.6344883030303), 4)
-    lon = round(float(22.951071874242427), 4)
-    return point_to_polygon(lat, lon, offset)
-    # Define the Nominatim API URL with the postal code and country code
-    url = f"https://nominatim.openstreetmap.org/search?postalcode={postal_code}&country={country_code}&format=json"
-
-    # Make the request to the API
-    response = requests.get(url)
-
-    # Check if the request was successful
-    if response.status_code == 200:
-        data = response.json()
-
-        # Ensure there is data returned
-        if len(data) > 0:
-            # Extract the latitude and longitude from the first result
-            lat = round(float(data[0]['lat']), 4)
-            lon = round(float(data[0]['lon']), 4)
-            # print(f"Latitude: {lat}, Longitude: {lon}")
-
-            # Create a small polygon around the point
-            return point_to_polygon(lat, lon, offset)
-        else:
-            print("No data found for the given postal code and country.")
-    else:
-        print(f"Failed to retrieve data. Status code: {response.status_code}")
 
 
 def point_to_polygon(lat, lon, offset=0.001):
@@ -60,25 +30,31 @@ def point_to_polygon(lat, lon, offset=0.001):
     return polygon
 
 
-# Define a POST endpoint to receive user's postal_code field in the request body
-@app.route('/api/v1/data/postal_code', methods=['POST'])
+# Define a POST endpoint to receive user's lat, lon coordinates in the request body
+@app.route('/api/v1/data', methods=['POST'])
 def get_postal_code_data():
     # Parse the JSON body
     data = request.get_json()
 
-    # Check if 'postal_code' field is present
-    if 'postal_code' not in data:
-        return jsonify({'error': 'postal_code is required'}), 400
+    # Check if 'latitude' field is present
+    if 'latitude' not in data:
+        return jsonify({'error': 'latitude is required'}), 400
+
+    # Check if 'longitude' field is present
+    if 'longitude' not in data:
+        return jsonify({'error': 'longitude is required'}), 400
 
     # Extract the postal_code
-    postal_code = data['postal_code']
+    latitude = round(float(data['latitude']), 4)
+    longitude = round(float(data['longitude']), 4)
+
+    # set offset for polygon calculation
+    offset = 0.001
 
     # polygon coordinates
-    polygon_coordinates = postal_code_to_small_polygon(postal_code, "GR")
-    # print(polygon_coordinates)
+    polygon_coordinates = point_to_polygon(latitude, longitude, offset)
 
     band_name = "O3"
-
 
     # {"band": "NO2", "band_id": "no2", "data_type": "S5PL2"},
     # {"band": "O3", "band_id": "o3", "data_type": "S5PL2"},
@@ -91,9 +67,9 @@ def get_postal_code_data():
     # Return a success message along with the postal_code received
     return jsonify({
         'message': 'Postal code received',
-        'postal_code': postal_code,
+        'latitude': latitude,
+        'longitude': longitude,
         'data': atmosphere_data
-        # 'coordinates': polygon_coordinates
     }), 200
 
 
